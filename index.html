@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title></title>
+    <script src="http://libs.baidu.com/jquery/1.8.3/jquery.min.js"></script>
+    <script src="moment.js"></script>
+    <script>
+        $(function(){
+            var autoUp = document.getElementById("upMp3");
+            var autoDown = document.getElementById("downMp3");
+            var price = localStorage.getItem('configSet')?JSON.parse(localStorage.getItem('configSet')):{};
+            console.log(price)
+            if(Object.keys(price).length>0){
+                var arr = [];temp_arr = [];
+                for(var key in price){
+                    temp_arr.push(key);
+                    arr.push(key.toLowerCase()+'@ticker');
+                }
+                //添加模版
+                addTemplate(temp_arr);
+                //生成URL
+                var url = arr.join('/');
+                //获取数据
+                connectSocket(url);
+            }
+
+            //添加币种事件
+            $('#add').click(function(){
+                if($('#bType').val()&&$('#bLow').val()&&$('#bHight').val()&&$('#bTime').val()){
+                    price[$('#bType').val()]={
+                        down:$('#bLow').val(),
+                        up:$('#bHight').val(),
+                        time:$('#bTime').val()*60000
+                    }
+                    localStorage.setItem('configSet',JSON.stringify(price));
+                    window.location.reload();
+                }else{
+                    alert('请输入正确的数据类型')
+                }
+            });
+
+            //修改币种事件
+            $('#editPrice').click(function(){
+                if(price[$('#bType').val()]&&$('#bType').val()&&$('#bLow').val()&&$('#bHight').val()&&$('#bTime').val()){
+                    price[$('#bType').val()]={
+                        down:$('#bLow').val(),
+                        up:$('#bHight').val(),
+                        time:$('#bTime').val()*60000
+                    }
+                    localStorage.setItem('configSet',JSON.stringify(price));
+                    window.location.reload();
+                }else{
+                    alert('请输入正确的数据类型')
+                }
+            });
+
+            //清除数据
+            $('#clear').click(function(){
+                localStorage.clear();
+                window.location.reload();
+            });
+
+
+            function connectSocket(url){
+                var socket = new WebSocket('wss://stream.binance.com:9443/stream?streams='+url);
+                // 打开Socket
+                socket.onopen = function(event) {
+                    // 监听消息
+                    socket.onmessage = function(event) {
+                        var data = JSON.parse(event.data).data;
+                        $('#'+data.s).text(data.c);
+                        $('#'+data.s+'priceH').text(data.h);
+                        $('#'+data.s+'priceL').text(data.l);
+                        $('#'+data.s+'percentage').text(data.P);
+                        checkPrice(data);
+                    };
+                    // 监听Socket的关闭
+                    socket.onclose = function(event) {
+                        window.location.reload();
+                    };
+                };
+            }
+
+            function addTemplate(arr){
+                var html='';
+                for(var i = 0;i<arr.length;i++){
+                    html+='<div class="list">' +
+                              '<p class="one">'+arr[i]+'价格:<span id="'+arr[i]+'"></span></p>'+
+                              '<p>24小时最高价格:<span id="'+arr[i]+'priceH"></span>24小时最低价格:<span id="'+arr[i]+'priceL"></span>涨跌比:<span id="'+arr[i]+'percentage"></span>%</p>'+
+                              '<p>最高警报价格：<span id="'+arr[i]+'alarmH">'+price[arr[i]].up+'</span>最低警报价格：<span id="'+arr[i]+'alarmL">'+price[arr[i]].down+'</span>警报间隔时间：<span id="'+arr[i]+'time">'+price[arr[i]].time/60000+'</span>分钟</p>'+
+                              '<p class="showList" id="'+arr[i]+'Log"></p>'+
+                            '</div>'
+                }
+                $('.price').append(html);
+            }
+
+            //检查价格是否符合报警规则
+            function checkPrice(data){
+                var d = price[data.s];
+                if(d){
+                    if(d.up<=Number(data.c)&&checkTime(d.time,d.upTime)){
+                        //价格上升
+                        d.upTime = moment().valueOf();
+                        autoUp.play();
+                        $('#'+data.s+'Log').append('<span class="upTime">价格上升到'+data.c+'  时间是：'+moment().format('MM-DD HH:mm:ss')+'</span>');
+                    }
+                    if(d.down>=Number(data.c)&&checkTime(d.time,d.downTime)){
+                        //价格下降
+                        d.downTime = moment().valueOf();
+                        autoDown.play();
+                        $('#'+data.s+'Log').append('<span class="downTime">价格下降到'+data.c+'  时间是：'+moment().format('MM-DD HH:mm:ss')+'</span>');
+                    }
+                }
+            }
+
+            //计算时间
+            function checkTime(time,timeUpDown){
+                if(!time||!timeUpDown){
+                    return true;
+                }else{
+                    if(moment().valueOf()-timeUpDown>=time){
+                        return true;
+                    }else{
+                        return false;
+                    }
+                }
+            }
+        })
+    </script>
+    <style>
+        *{
+            padding: 0px;
+            margin: 0px;
+        }
+        .list{
+            border-bottom: 1px solid lightblue;
+            padding: 5px;
+        }
+        .price .one{
+            margin-left: 0px;
+            font-size: 20px;
+            line-height: 34px;
+        }
+        .price p{
+            color:#333;
+            line-height: 24px;
+            font-size: 14px;
+            margin-left: 100px;
+        }
+        .price span{
+            color: red;
+            margin-left: 20px;
+            margin-right: 20px;
+        }
+        #edit {
+            margin-left: 200px;
+            margin-top: 50px;
+        }
+        #edit input{
+            display: block;
+            margin-bottom: 20px;
+            width: 200px;
+            line-height: 30px;
+        }
+        #edit p{
+            width: 100px;
+            line-height: 30px;
+            cursor: pointer;
+            background: #444444;
+            color: white;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .showList span{
+            display: block;
+            line-height: 20px;
+            font-size: 14px;
+        }
+        .showList .upTime{
+            color: #7fa9ff;
+        }
+    </style>
+</head>
+<body>
+   <div class="price">
+
+   </div>
+   <div id="edit">
+       <input type="text" id="bType" value="" placeholder="输入币种类型例如CNDBTC">
+       <input type="number" id="bLow" value="" placeholder="输入最低报警价格" >
+       <input type="number" id="bHight" value="" placeholder="输入最高报警价格" >
+       <input type="number" id="bTime" value="" placeholder="输入价格报警时间间隔(单位分钟)">
+       <p id="add">添加</p>
+       <p id="editPrice">修改</p>
+       <p id="clear">清除数据</p>
+   </div>
+   <audio id="upMp3" src="up.mp3">
+   </audio>
+   <audio id="downMp3" src="down.mp3">
+   </audio>
+</body>
+</html>
